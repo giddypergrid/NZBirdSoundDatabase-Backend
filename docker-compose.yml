@@ -1,0 +1,97 @@
+# ─────────────────────────────────────────────────────────────
+# docker-compose.yml — full local-dev stack.
+#
+#   db     PostgreSQL 16          ← created on first boot from .env vars
+#   web    Django + gunicorn      ← built from ./Dockerfile
+#   alloy  Grafana Alloy          ← scrapes web:/metrics, ships to Grafana Cloud
+#
+# Usage:
+#   docker compose up --build       # first time or after Dockerfile changes
+#   docker compose up               # subsequent runs
+#   docker compose up -d            # background
+#   docker compose logs -f web      # tail one service
+#   docker compose down             # stop (data persists)
+#   docker compose down -v          # stop AND wipe DB volume
+#
+# .env (same folder) provides credentials & secrets.
+# ─────────────────────────────────────────────────────────────
+
+services:
+
+  db:
+    image: postgres:16-alpine
+    container_name: birds-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       ${DB_NAME}
+      POSTGRES_USER:     ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      # Named volume — survives `docker compose down`. Wiped only by `down -v`.
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    # Uncomment to expose Postgres to the host (DBeaver / TablePlus on localhost:5432).
+    # ports:
+    #   - "5432:5432"
+
+  web:
+    build: .
+    container_name: birds-web
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Inside the compose network, Postgres is reachable at hostname `db`.
+      DB_HOST: db
+      # Point Bird_Sound.key_files at the bind-mount locations (they would
+      # otherwise default to /MaterialsPrep etc. which don't exist here).
+      MATERIALS_PREP_DIR: /seed
+      BIRD_CLASSIFY_DIR: /opt/BirdClassify
+      BIRD_TEXT_TRAINING_DIR: /opt/birdTextTraining
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      # Dev overlay: host source mounted onto the container so that
+      #   - `makemigrations` / `shell` write back to the host filesystem
+      #   - edits to .py files take effect on next container restart
+      # Comment this out for prod-like behaviour (use the baked image only).
+      - .:/app
+      # Seed CSVs + train_audio + bird_pic (read-only) — served at /api/audio,
+      # /api/image and used by `import_seed_data` for reference CSVs.
+      - ../MaterialsPrep:/seed:ro
+      # Trained classifier artifacts (read-only) — loaded by /classify/.
+      - ../BirdClassify:/opt/BirdClassify:ro
+      # Sentence-Transformer embeddings + search.py (read-only) —
+      # imported as a module by /search-by-description/.
+      - ../birdTextTraining:/opt/birdTextTraining:ro
+
+  alloy:
+    image: grafana/alloy:latest
+    container_name: birds-alloy
+    restart: unless-stopped
+    depends_on:
+      - web
+    volumes:
+      - ./monitoring/config.alloy:/etc/alloy/config.alloy:ro
+      - alloy-data:/var/lib/alloy/data
+    command:
+      - run
+      - --storage.path=/var/lib/alloy/data
+      - --server.http.listen-addr=0.0.0.0:12345
+      - /etc/alloy/config.alloy
+    environment:
+      GRAFANA_CLOUD_TOKEN: ${GRAFANA_CLOUD_TOKEN}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "12345:12345"
+
+volumes:
+  pg_data:
+  alloy-data:

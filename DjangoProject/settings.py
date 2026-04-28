@@ -1,12 +1,84 @@
+import os
 from pathlib import Path
+
+from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = 'django-insecure-dummy-key-replace-this-later'
+# Load .env next to manage.py. OS env vars win (Docker/CI overrides).
+load_dotenv(BASE_DIR / ".env", override=False)
 
-DEBUG = True
 
-ALLOWED_HOSTS = []
+def env(key: str, default=None, *, required: bool = False):
+    """Read an env var, stripping surrounding whitespace."""
+    val = os.environ.get(key)
+    if val is None or val == "":
+        if required:
+            raise RuntimeError(f"Missing required environment variable: {key}")
+        return default
+    return val.strip()
+
+
+def env_bool(key: str, default: bool = False) -> bool:
+    val = env(key)
+    if val is None:
+        return default
+    return val.lower() in ("1", "true", "yes", "on")
+
+
+def env_list(key: str, default=None) -> list[str]:
+    val = env(key)
+    if not val:
+        return list(default or [])
+    return [item.strip() for item in val.split(",") if item.strip()]
+
+
+# ── Core ──────────────────────────────────────────────────────
+DJANGO_ENV = (env("DJANGO_ENV", default="production") or "production").lower()
+if DJANGO_ENV not in ("development", "production"):
+    raise RuntimeError(
+        f"DJANGO_ENV must be 'development' or 'production', got {DJANGO_ENV!r}"
+    )
+IS_DEV = DJANGO_ENV == "development"
+
+DEBUG = IS_DEV
+
+# ── Sentry (error + performance tracking) ─────────────────────
+# No-op when SENTRY_DSN is unset (e.g. local dev). Auto-captures
+# unhandled exceptions, logger.error/exception calls, slow DB queries.
+SENTRY_DSN = env("SENTRY_DSN", default=None)
+if SENTRY_DSN:
+    import sentry_sdk
+    from sentry_sdk.integrations.django import DjangoIntegration
+
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        integrations=[DjangoIntegration()],
+        environment=DJANGO_ENV,
+        # Sample rate for performance traces (1.0 = 100%, 0.1 = 10%).
+        # Keep low to stay inside the free tier's transaction quota.
+        traces_sample_rate=float(env("SENTRY_TRACES_SAMPLE_RATE", default="0.1")),
+        # Don't send IP / cookies / user data unless we explicitly opt in.
+        send_default_pii=False,
+        # Helps Sentry group releases when you tag deployments.
+        release=env("SENTRY_RELEASE", default=None),
+    )
+
+# SECRET_KEY: required in prod; insecure dev fallback only in DEBUG.
+SECRET_KEY = env(
+    "DJANGO_SECRET_KEY",
+    default=("django-insecure-dev-only-DO-NOT-USE-IN-PROD" if DEBUG else None),
+    required=not DEBUG,
+)
+
+ALLOWED_HOSTS = env_list(
+    "DJANGO_ALLOWED_HOSTS",
+    default=["localhost", "127.0.0.1"] if DEBUG else [],
+)
+# In dev, always allow host.docker.internal so Dockerised tooling
+# (Grafana Alloy monitoring agent, etc.) can reach the host dev server.
+if IS_DEV and "host.docker.internal" not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append("host.docker.internal")
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -18,11 +90,22 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'drf_spectacular',
+    'django_prometheus',
     'Bird_Sound',
 ]
 
+# django-prometheus middleware MUST be the outermost wrapper:
+# `Before*` first, `After*` last, so it sees every request's true latency.
 MIDDLEWARE = [
+    'django_prometheus.middleware.PrometheusBeforeMiddleware',
+    # RequestIDMiddleware sits as early as possible so every downstream log
+    # line — including DB errors and security middleware rejections — is
+    # tagged with the same request_id.
+    'Bird_Sound.middleware.RequestIDMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    # WhiteNoise serves /static/ in prod (admin CSS, drf-spectacular UI).
+    # Must be directly after SecurityMiddleware. No-op when DEBUG=True.
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -30,6 +113,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'django_prometheus.middleware.PrometheusAfterMiddleware',
 ]
 
 ROOT_URLCONF = 'DjangoProject.urls'
@@ -52,14 +136,22 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'DjangoProject.wsgi.application'
 
+# ── Database (PostgreSQL via psycopg 3) ───────────────────────
+# Creds from env (.env.example). In Docker, DB_HOST=db (compose service);
+# on bare host, DB_HOST=localhost (or wherever Postgres lives).
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'django',
-        'USER': 'root',
-        'PASSWORD': 'root',
-        'HOST': 'localhost',
-        'PORT': '3306',
+        'ENGINE':   'django.db.backends.postgresql',
+        'NAME':     env('DB_NAME',     default='birdsound', required=not DEBUG),
+        'USER':     env('DB_USER',     default='bird',      required=not DEBUG),
+        'PASSWORD': env('DB_PASSWORD', default='bird',      required=not DEBUG),
+        'HOST':     env('DB_HOST',     default='localhost'),
+        'PORT':     env('DB_PORT',     default='5432'),
+        # Persistent connections — saves ~5ms per request. 0 disables.
+        'CONN_MAX_AGE': int(env('DB_CONN_MAX_AGE', default='60')),
+        # CONN_HEALTH_CHECKS pings stale conns once per request before reuse.
+        # Cheap insurance against "server closed the connection unexpectedly".
+        'CONN_HEALTH_CHECKS': True,
     }
 }
 
@@ -84,14 +176,121 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = 'static/'
+# collectstatic writes here at container build/boot. WhiteNoise serves it.
+STATIC_ROOT = BASE_DIR / "staticfiles"
+# Compressed + hashed filenames (long-term caching). Falls back to plain
+# files in dev if collectstatic hasn't run.
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"} if not DEBUG
+                    else {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+}
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-CORS_ALLOW_ALL_ORIGINS = True # Adjust as needed
+# ── Logging ───────────────────────────────────────────────────
+# Dev:  pretty single-line console output for humans.
+# Prod: structured JSON to stdout — one JSON object per line.
+#       Container runtime / log shipper (Alloy → Loki) ingests it.
+# Every record gets a `request_id` field via RequestIDFilter.
+LOG_FORMAT = (env("LOG_FORMAT", default="json" if not IS_DEV else "console") or "console").lower()
+LOG_LEVEL = (env("LOG_LEVEL", default="INFO") or "INFO").upper()
 
-# Django REST Framework Configuration
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "filters": {
+        "request_id": {
+            "()": "Bird_Sound.middleware.RequestIDFilter",
+        },
+    },
+    "formatters": {
+        "console": {
+            "format": "{levelname:<7} {asctime} [{request_id}] {name}: {message}",
+            "style": "{",
+        },
+        "json": {
+            "()": "pythonjsonlogger.jsonlogger.JsonFormatter",
+            # Keys in the JSON output. `%(...)` are stdlib LogRecord attrs.
+            # `request_id` comes from the filter; extras passed via
+            # logger.info("...", extra={...}) are merged automatically.
+            "format": "%(asctime)s %(levelname)s %(name)s %(message)s %(request_id)s",
+            "rename_fields": {
+                "asctime": "timestamp",
+                "levelname": "level",
+                "name": "logger",
+                "message": "msg",
+            },
+            "datefmt": "%Y-%m-%dT%H:%M:%S%z",
+        },
+    },
+    "handlers": {
+        "stdout": {
+            "class": "logging.StreamHandler",
+            "filters": ["request_id"],
+            "formatter": LOG_FORMAT,
+        },
+    },
+    "root": {
+        "handlers": ["stdout"],
+        "level": LOG_LEVEL,
+    },
+    "loggers": {
+        # Django's runserver request log spam — keep at INFO so you see
+        # 4xx/5xx, but suppress the chatty 200/304 lines if desired.
+        "django.server": {"level": "INFO", "propagate": True},
+        # Quieten noisy third-party libs in dev.
+        "urllib3": {"level": "WARNING", "propagate": True},
+        "PIL": {"level": "WARNING", "propagate": True},
+    },
+}
+
+# ── CORS ──────────────────────────────────────────────────────
+# Dev: allow all (arbitrary Vite ports). Prod: whitelist via env.
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
+else:
+    CORS_ALLOW_ALL_ORIGINS = False
+    CORS_ALLOWED_ORIGINS = env_list('CORS_ALLOWED_ORIGINS', default=[])
+
+# ── Security headers ──────────────────────────────────────────────
+# Prod only. Assumes TLS-terminating proxy sets X-Forwarded-Proto.
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", default=True)
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = int(env("DJANGO_HSTS_SECONDS", default=str(60 * 60 * 24 * 30)))  # 30 days
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = env_bool("DJANGO_HSTS_PRELOAD", default=False)
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_REFERRER_POLICY = "same-origin"
+    X_FRAME_OPTIONS = "DENY"
+
+# ── Request body limits ───────────────────────────────────────
+# /classify/ POSTs raw audio bytes (no multipart). Django's
+# DATA_UPLOAD_MAX_MEMORY_SIZE is the hard cap on request.body.
+DATA_UPLOAD_MAX_MEMORY_SIZE = int(env("DATA_UPLOAD_MAX_MEMORY_SIZE", default=str(5 * 1024 * 1024)))
+MAX_CLASSIFY_AUDIO_BYTES    = int(env("MAX_CLASSIFY_AUDIO_BYTES",    default=str(5 * 1024 * 1024)))
+
+# Memory back-pressure: /classify/ returns 503+Retry-After when
+# psutil.virtual_memory().available drops below this.
+MIN_FREE_MEMORY_BYTES = int(env("MIN_FREE_MEMORY_BYTES", default=str(1 * 1024 * 1024 * 1024)))
+
+# ── Django REST Framework ────────────────────────────────────────────
+# Scoped throttles: set throttle_scope='classify'/'search' on hot views.
+# Throttles use the default cache (LocMem). Swap to Redis in prod.
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.ScopedRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': env('THROTTLE_ANON', default='120/min'),
+        'classify': env('THROTTLE_CLASSIFY', default='5/min'),
+        'search': env('THROTTLE_SEARCH', default='30/min'),
+    },
 }
 
 # DRF Spectacular Configuration
@@ -102,6 +301,11 @@ SPECTACULAR_SETTINGS = {
     'SERVE_INCLUDE_SCHEMA': False,
 }
 
-# File paths for audio and image files
-AUDIO_FILES_ROOT = BASE_DIR.parent / 'MaterialsPrep' / 'train_audio'
-IMAGE_FILES_ROOT = BASE_DIR.parent / 'MaterialsPrep' / 'bird_pic'
+# Cross-folder paths: single source of truth in Bird_Sound.key_files,
+# re-exported on settings.* for views that read from Django config.
+from Bird_Sound.key_files import key_files  # noqa: E402
+
+AUDIO_FILES_ROOT = key_files.audio_files_root
+IMAGE_FILES_ROOT = key_files.image_files_root
+CLASSIFIER_MODEL_PATH = key_files.classifier_model_path
+CLASSIFIER_ARTIFACTS_PATH = key_files.classifier_artifacts_path

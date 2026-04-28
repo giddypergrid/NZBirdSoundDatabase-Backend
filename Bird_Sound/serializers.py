@@ -18,7 +18,9 @@ class BirdSoundSerializer(serializers.ModelSerializer):
 class BirdSerializer(serializers.ModelSerializer):
     class Meta:
         model = Bird
-        fields = ['eBird', 'common_name', 'scientific_name', 'extra_name', 'created_at', 'updated_at']
+        fields = ['eBird', 'common_name', 'scientific_name', 'extra_name',
+                  'description', 'sound_description', 'naughty_description',
+                  'created_at', 'updated_at']
         read_only_fields = ['eBird', 'created_at', 'updated_at']
 
 class BirdListFilterSerializer(serializers.Serializer):
@@ -38,3 +40,42 @@ class BirdSoundFilterSerializer(serializers.Serializer):
             if data['start_time'] > data['end_time']:
                 raise serializers.ValidationError("start_time must be before end_time")
         return data
+
+
+class ClassifyPredictionSerializer(serializers.Serializer):
+    eBird = serializers.CharField()
+    confidence = serializers.FloatField()
+
+class ClassifyResponseSerializer(serializers.Serializer):
+    eBird = serializers.CharField()
+    confidence = serializers.FloatField()
+    top_predictions = ClassifyPredictionSerializer(many=True)
+
+
+class SearchByDescriptionQuerySerializer(serializers.Serializer):
+    q = serializers.CharField(required=True, max_length=500,
+                              help_text="Free-text description to match against birds.")
+    threshold = serializers.FloatField(required=False, default=0.45, min_value=0.0, max_value=1.0,
+                                       help_text="Strong-match threshold. Hits above this are flagged strong_match=true.")
+    top_k = serializers.IntegerField(required=False, default=4, min_value=1, max_value=50,
+                                     help_text="Number of birds to return (always this many if available).")
+
+
+class SearchByDescriptionHitSerializer(serializers.Serializer):
+    eBird = serializers.CharField()
+    common_name = serializers.CharField(allow_blank=True)
+    scientific_name = serializers.CharField(allow_blank=True)
+    score = serializers.FloatField()
+    best_field = serializers.CharField(
+        help_text="Which chunk produced the top score: name | description | sound_description | naughty_description",
+    )
+    strong_match = serializers.BooleanField(
+        help_text="True if score > threshold. UI can de-emphasise hits where this is false.",
+    )
+
+
+class SearchByDescriptionResponseSerializer(serializers.Serializer):
+    query = serializers.CharField()
+    threshold = serializers.FloatField()
+    count = serializers.IntegerField()
+    results = SearchByDescriptionHitSerializer(many=True)
