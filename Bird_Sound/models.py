@@ -30,6 +30,9 @@ class Bird(models.Model):
     common_name = models.CharField(max_length=100)
     scientific_name = models.CharField(max_length=100)
     extra_name = models.CharField(max_length=100, blank=True, null=True)
+    description = models.TextField(blank=True, null=True)
+    sound_description = models.TextField(blank=True, null=True)
+    naughty_description = models.CharField(max_length=255, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     

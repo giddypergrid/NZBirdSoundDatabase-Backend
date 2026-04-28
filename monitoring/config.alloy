@@ -1,0 +1,32 @@
+// ─────────────────────────────────────────────────────────────
+// Grafana Alloy config — scrapes Django /metrics and ships
+// to Grafana Cloud Prometheus.
+// Designed to run inside a Docker container (see docker-compose.yml).
+// ─────────────────────────────────────────────────────────────
+
+// Scrape job: hits the Django container every 30 seconds.
+// `web:8000` is resolved by Docker's internal DNS — both alloy and
+// web are on the same compose network, so service name == hostname.
+prometheus.scrape "django" {
+    targets = [
+        { __address__ = "web:8000", job = "django" },
+    ]
+    metrics_path    = "/metrics"
+    scrape_interval = "30s"
+    scrape_timeout  = "10s"
+
+    forward_to = [prometheus.remote_write.grafana_cloud.receiver]
+}
+
+// Push metrics up to Grafana Cloud Prometheus.
+// URL/username are non-secret; token comes from env var.
+prometheus.remote_write "grafana_cloud" {
+    endpoint {
+        url = "https://prometheus-prod-41-prod-au-southeast-1.grafana.net/api/prom/push"
+
+        basic_auth {
+            username = "3144246"
+            password = sys.env("GRAFANA_CLOUD_TOKEN")
+        }
+    }
+}
