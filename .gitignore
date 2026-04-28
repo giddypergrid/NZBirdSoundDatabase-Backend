@@ -201,3 +201,7 @@ MaterialsPrep/train_audio/
 MaterialsPrep/bird_pic/
 *.sqlite
 *.sqlite3
+
+# ── Google Drive sync junk ──────────────────────────────────
+.tmp.drivedownload/
+.tmp.driveupload/
