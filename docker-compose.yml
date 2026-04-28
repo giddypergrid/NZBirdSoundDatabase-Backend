@@ -50,6 +50,7 @@ services:
       # otherwise default to /MaterialsPrep etc. which don't exist here).
       MATERIALS_PREP_DIR: /seed
       BIRD_CLASSIFY_DIR: /opt/BirdClassify
+      BIRD_TEXT_TRAINING_DIR: /opt/birdTextTraining
     depends_on:
       db:
         condition: service_healthy
@@ -61,10 +62,14 @@ services:
       #   - edits to .py files take effect on next container restart
       # Comment this out for prod-like behaviour (use the baked image only).
       - .:/app
-      # Seed CSVs (read-only) — used by `import_seed_data`.
+      # Seed CSVs + train_audio + bird_pic (read-only) — served at /api/audio,
+      # /api/image and used by `import_seed_data` for reference CSVs.
       - ../MaterialsPrep:/seed:ro
-      # Trained classifier artifacts (read-only).
+      # Trained classifier artifacts (read-only) — loaded by /classify/.
       - ../BirdClassify:/opt/BirdClassify:ro
+      # Sentence-Transformer embeddings + search.py (read-only) —
+      # imported as a module by /search-by-description/.
+      - ../birdTextTraining:/opt/birdTextTraining:ro
 
   alloy:
     image: grafana/alloy:latest
