@@ -258,6 +258,14 @@ else:
 if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", default=True)
+    # Internal-only endpoints accessed over the docker network without going
+    # through Caddy — they don't get the X-Forwarded-Proto: https header, so
+    # SECURE_SSL_REDIRECT would 301 them to https://web:8000/... and break.
+    # /metrics/ is scraped by Alloy; healthz is hit by the Docker healthcheck.
+    SECURE_REDIRECT_EXEMPT = [
+        r"^metrics/?$",
+        r"^birds/api/healthz/?$",
+    ]
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_HSTS_SECONDS = int(env("DJANGO_HSTS_SECONDS", default=str(60 * 60 * 24 * 30)))  # 30 days
