@@ -11,10 +11,10 @@ prometheus.scrape "django" {
     targets = [
         { __address__ = "web:8000", job = "django" },
     ]
-    // Trailing slash matters: Django's APPEND_SLASH=True redirects
-    // /metrics -> /metrics/ with a 301, and Alloy's scraper does NOT
-    // follow redirects, so a missing slash silently drops every scrape.
-    metrics_path    = "/metrics/"
+    // django_prometheus registers the URL as `^metrics$` (no trailing slash).
+    // Must match exactly — with a trailing slash Django 404s. Also, this path
+    // is in SECURE_REDIRECT_EXEMPT so no HTTPS-redirect interferes with scrapes.
+    metrics_path    = "/metrics"
     scrape_interval = "30s"
     scrape_timeout  = "10s"
 
