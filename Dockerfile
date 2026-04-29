@@ -54,9 +54,6 @@ COPY --from=builder /install /usr/local
 WORKDIR /app
 COPY --chown=app:app . /app
 
-# Make entrypoint executable (Windows checkouts lose the +x bit).
-RUN chmod +x /app/entrypoint.sh
-
 # Drop privileges before running anything.
 USER app
 
@@ -70,4 +67,7 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
     CMD curl -fsS http://localhost:8000/birds/api/healthz/ || exit 1
 
-ENTRYPOINT ["/app/entrypoint.sh"]
+# Invoke the entrypoint via `sh` rather than relying on the +x bit.
+# This works even when a host bind mount overlays /app with files
+# coming from a Windows checkout (where Git can't track the exec bit).
+ENTRYPOINT ["sh", "/app/entrypoint.sh"]
