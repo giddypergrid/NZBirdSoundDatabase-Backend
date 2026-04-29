@@ -70,6 +70,7 @@ services:
       # Sentence-Transformer embeddings + search.py (read-only) —
       # imported as a module by /search-by-description/.
       - ../birdTextTraining:/opt/birdTextTraining:ro
+      - staticfiles:/app/staticfiles
 
   alloy:
     image: grafana/alloy:latest
@@ -95,3 +96,4 @@ services:
 volumes:
   pg_data:
   alloy-data:
+  staticfiles:
