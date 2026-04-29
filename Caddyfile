@@ -1,0 +1,20 @@
+# ─────────────────────────────────────────────────────────────
+# Caddy — reverse proxy with automatic HTTPS for api.nzbirddatabase.com.
+#
+# On first boot Caddy will:
+#   1. Solve the ACME http-01 challenge on port 80
+#   2. Receive a Let's Encrypt cert valid for api.nzbirddatabase.com
+#   3. Start serving HTTPS on port 443
+#   4. Auto-renew ~30 days before expiry, forever
+#
+# Everything else (port 80 → 443 redirect, HTTP/2, gzip) is on by default.
+# ─────────────────────────────────────────────────────────────
+
+api.nzbirddatabase.com {
+    # Forward all traffic to the Django container on the internal Docker network.
+    # `web` resolves via Docker DNS because both services share `backend_default`.
+    reverse_proxy web:8000
+
+    # Add a few sensible headers (HSTS is set automatically when using https).
+    encode gzip
+}

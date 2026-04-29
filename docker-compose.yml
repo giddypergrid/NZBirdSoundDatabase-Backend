@@ -54,8 +54,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     volumes:
       # Dev overlay: host source mounted onto the container so that
       #   - `makemigrations` / `shell` write back to the host filesystem
@@ -70,6 +70,24 @@ services:
       # Sentence-Transformer embeddings + search.py (read-only) —
       # imported as a module by /search-by-description/.
       - ../birdTextTraining:/opt/birdTextTraining:ro
+
+  caddy:
+    # Reverse proxy with automatic Let's Encrypt HTTPS. Reads ./Caddyfile.
+    # First boot fetches a cert for api.nzbirddatabase.com via the ACME http-01
+    # challenge on port 80 (must be reachable from the public internet); after
+    # that, renewals happen in the background ~30 days before expiry.
+    image: caddy:2-alpine
+    container_name: birds-caddy
+    restart: unless-stopped
+    depends_on:
+      - web
+    ports:
+      - "80:80"      # ACME http-01 challenge + plain-HTTP -> HTTPS redirect
+      - "443:443"    # HTTPS
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data        # certs + ACME state — DO NOT lose this volume
+      - caddy_config:/config    # Caddy's runtime config cache
 
   alloy:
     image: grafana/alloy:latest
@@ -95,3 +113,5 @@ services:
 volumes:
   pg_data:
   alloy-data:
+  caddy_data:
+  caddy_config:
