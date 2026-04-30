@@ -263,9 +263,9 @@ if not DEBUG:
     # SECURE_SSL_REDIRECT would 301 them to https://web:8000/... and break.
     # /metrics/ is scraped by Alloy; healthz is hit by the Docker healthcheck.
     SECURE_REDIRECT_EXEMPT = [
-        # django_prometheus registers `^metrics$` (no trailing slash).
-        r"^metrics$",
-        r"^birds/api/healthz/?$",
+        # Paths start with `/` — patterns must include it.
+        r"^/metrics$",
+        r"^/birds/api/healthz/?$",
     ]
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
