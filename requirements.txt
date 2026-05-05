@@ -33,6 +33,7 @@ birdnetlib==0.18.0
 librosa>=0.9.0
 resampy==0.4.2
 tensorflow>=2.8.0
+sentence-transformers
 
 # ── Tabular classifier (BirdClassify) ────────────────────────
 typing_extensions
