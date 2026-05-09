@@ -38,7 +38,7 @@ class Bird(models.Model):
     
     class Meta:
         db_table = 'bird_naming_map'
-        ordering = ['-created_at']
+        ordering = ['common_name']
         indexes = [
             models.Index(fields=['common_name']),
             models.Index(fields=['scientific_name']),
