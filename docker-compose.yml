@@ -51,11 +51,15 @@ services:
       MATERIALS_PREP_DIR: /seed
       BIRD_CLASSIFY_DIR: /opt/BirdClassify
       BIRD_TEXT_TRAINING_DIR: /opt/birdTextTraining
+    # Strip Windows CRLF from entrypoint at runtime — overrides Dockerfile ENTRYPOINT.
+    entrypoint: ["sh", "-c", "sed 's/\\r//' /app/entrypoint.sh > /tmp/ep.sh && sh /tmp/ep.sh"]
     depends_on:
       db:
         condition: service_healthy
     expose:
       - "8000"
+    ports:
+      - "8000:8000"
     volumes:
       # Dev overlay: host source mounted onto the container so that
       #   - `makemigrations` / `shell` write back to the host filesystem
