@@ -115,17 +115,12 @@ class AudioFileView(APIView):
 class ImageFileView(APIView):
     """GET /birds/api/image/{eBird}/{index}/ — tries jpeg/jpg/png/webp."""
     def get(self, request, eBird, index):
-        folder = Path(settings.IMAGE_FILES_ROOT) / eBird
-        try:
-            folder.resolve().relative_to(Path(settings.IMAGE_FILES_ROOT).resolve())
-        except ValueError:
-            raise PermissionDenied("Invalid file path")
+        root = Path(settings.IMAGE_FILES_ROOT)
         for ext in ('jpeg', 'jpg', 'png', 'webp'):
-            candidate = folder / f"{index}.{ext}"
-            if candidate.exists():
-                ctype, _ = guess_type(str(candidate))
-                return FileResponse(open(candidate, 'rb'),
-                                    content_type=ctype or 'application/octet-stream')
+            try:
+                return _serve_static_file(root, Path(eBird) / f"{index}.{ext}")
+            except NotFound:
+                continue
         raise NotFound("File not found")
 
 
@@ -207,7 +202,7 @@ class ClassifyAudioView(APIView):
 
 class SearchByDescriptionView(APIView):
     """
-    GET /birds/api/search-by-description/?q=...&threshold=0.45&top_k=4
+    GET /birds/api/search-by-description/?query=...&threshold=0.45&top_k=4
 
     Semantic search over bird descriptions. Always returns top_k hits;
     each carries `strong_match` (score > threshold) and `best_field`.
@@ -221,7 +216,7 @@ class SearchByDescriptionView(APIView):
     def get(self, request):
         s = SearchByDescriptionQuerySerializer(data=request.query_params)
         s.is_valid(raise_exception=True)
-        query = s.validated_data["q"]
+        query = s.validated_data["query"]
         threshold = s.validated_data.get("threshold", 0.45)
         top_k = s.validated_data.get("top_k", 4)
 

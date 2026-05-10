@@ -10,17 +10,14 @@ class BirdSoundFilenameSerializer(serializers.ModelSerializer):
 class BirdSoundSerializer(serializers.ModelSerializer):
     class Meta:
         model = BirdSound
-        fields = ['id', 'filename', 'eBird', 'secondary_labels', 'station', 
-                 'recording_mode', 'recording_datetime', 'file_type', 'created_at', 'updated_at']
+        fields = '__all__'
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
 class BirdSerializer(serializers.ModelSerializer):
     class Meta:
         model = Bird
-        fields = ['eBird', 'common_name', 'scientific_name', 'extra_name',
-                  'description', 'sound_description', 'naughty_description',
-                  'created_at', 'updated_at']
+        fields = '__all__'
         read_only_fields = ['eBird', 'created_at', 'updated_at']
 
 class BirdListFilterSerializer(serializers.Serializer):
@@ -53,8 +50,8 @@ class ClassifyResponseSerializer(serializers.Serializer):
 
 
 class SearchByDescriptionQuerySerializer(serializers.Serializer):
-    q = serializers.CharField(required=True, max_length=500,
-                              help_text="Free-text description to match against birds.")
+    query = serializers.CharField(required=True, max_length=500,
+                                  help_text="Free-text description to match against birds.")
     threshold = serializers.FloatField(required=False, default=0.45, min_value=0.0, max_value=1.0,
                                        help_text="Strong-match threshold. Hits above this are flagged strong_match=true.")
     top_k = serializers.IntegerField(required=False, default=4, min_value=1, max_value=50,

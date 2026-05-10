@@ -3,6 +3,8 @@ Bird Sound Classifier (singleton, loaded once at startup).
 
 Pipeline: audio bytes → BirdNET embedding (1024-d) → AutoGluon → eBird code.
 Call get_classifier().classify_bytes(data, suffix) from a view.
+
+Classifer itself has a predictor and an extractor(construted with the BirdNET analyzer). The extractor runs the TFLite model to get the embedding, then the predictor runs the AutoGluon model to get class probabilities and maps to eBird codes.
 """
 
 import os
@@ -116,6 +118,7 @@ class BirdClassifier:
         os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
         os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
+        # swallow loading output
         old_out, old_err = sys.stdout, sys.stderr
         sys.stdout = io.StringIO()
         sys.stderr = io.StringIO()
@@ -146,13 +149,12 @@ class BirdClassifier:
             scaled = self.scaler.transform(embedding.reshape(1, -1))
             df = pd.DataFrame(scaled, columns=[f"f{i}" for i in range(EMBEDDING_DIM)])
 
-            pred_label = int(self.predictor.predict(df).values[0])
             proba = self.predictor.predict_proba(df).values[0]
             top_idx = np.argsort(proba)[::-1][:5]
 
             return {
-                "eBird": self.class_mapping.get(str(pred_label), f"unknown_{pred_label}"),
-                "confidence": round(float(proba[pred_label]), 4),
+                "eBird": self.class_mapping.get(str(top_idx[0]), f"unknown_{top_idx[0]}"),
+                "confidence": round(float(proba[top_idx[0]]), 4),
                 "top_predictions": [
                     {
                         "eBird": self.class_mapping.get(str(i), f"unknown_{i}"),
