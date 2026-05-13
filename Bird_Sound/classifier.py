@@ -19,12 +19,17 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import librosa
 
 from .key_files import key_files
 
 logger = logging.getLogger(__name__)
 
-EMBEDDING_DIM = 1024
+EMBEDDING_DIM    = 1024
+SAMPLE_RATE      = 48_000
+CHUNK_SAMPLES    = SAMPLE_RATE * 3   # 144 000 — BirdNET 3 s window
+TRIM_SECONDS     = 0.5
+MIN_TRIM_DURATION = 3.0
 
 # ── Singleton holder ──────────────────────────────────────
 _classifier_instance = None
@@ -63,22 +68,21 @@ class EmbeddingExtractor:
         return self.interp.get_tensor(self.embedding_index)[0]
 
     def extract_from_file(self, audio_path: str, analyzer) -> np.ndarray:
-        """Average embeddings across all 3-second chunks of the audio file."""
-        from birdnetlib import Recording
+        """Load, trim, chunk, embed — matches the training pipeline exactly."""
+        audio, _ = librosa.load(audio_path, sr=SAMPLE_RATE, mono=True)
 
-        old_out, old_err = sys.stdout, sys.stderr
-        sys.stdout = io.StringIO()
-        sys.stderr = io.StringIO()
-        try:
-            rec = Recording(analyzer, audio_path)
-            rec.read_audio_data()
-        finally:
-            sys.stdout = old_out
-            sys.stderr = old_err
+        duration = len(audio) / SAMPLE_RATE
+        if duration > MIN_TRIM_DURATION:
+            trim_samples = int(TRIM_SECONDS * SAMPLE_RATE)
+            audio = audio[trim_samples:-trim_samples]
 
-        chunks = getattr(rec, "chunks", None)
-        if not chunks or len(chunks) == 0:
-            raise ValueError("No audio chunks extracted (file too short or invalid)")
+        raw_chunks = [audio[s : s + CHUNK_SAMPLES] for s in range(0, len(audio), CHUNK_SAMPLES)]
+        chunks = [
+            np.pad(c, (0, CHUNK_SAMPLES - len(c))) if len(c) < CHUNK_SAMPLES else c
+            for c in raw_chunks
+        ]
+        if not chunks:
+            raise ValueError("No audio chunks extracted (file is empty)")
 
         vectors = [self._get_embedding_for_chunk(c) for c in chunks]
         avg = np.mean(vectors, axis=0)
