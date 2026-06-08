@@ -214,7 +214,10 @@ class SearchByDescriptionView(APIView):
         responses={200: SearchByDescriptionResponseSerializer},
     )
     def get(self, request):
-        s = SearchByDescriptionQuerySerializer(data=request.query_params)
+        params = request.query_params.copy()
+        if "query" not in params and "q" in params:
+            params["query"] = params["q"]
+        s = SearchByDescriptionQuerySerializer(data=params)
         s.is_valid(raise_exception=True)
         query = s.validated_data["query"]
         threshold = s.validated_data.get("threshold", 0.45)

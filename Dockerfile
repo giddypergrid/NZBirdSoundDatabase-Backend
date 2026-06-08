@@ -26,7 +26,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /build
 COPY requirements.txt .
-RUN pip install --prefix=/install -r requirements.txt
+RUN pip install --prefix=/install torch --index-url https://download.pytorch.org/whl/cpu \
+    && pip install --prefix=/install -r requirements.txt
 
 
 # ── Stage 2: runtime ─────────────────────────────────────────
