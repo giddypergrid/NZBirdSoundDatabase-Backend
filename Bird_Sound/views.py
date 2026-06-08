@@ -127,7 +127,7 @@ class ImageFileView(APIView):
 # ── Classify ─────────────────────────────────────────────────
 _EXT_TO_SUFFIX = {
     'wav': '.wav', 'flac': '.flac', 'mp3': '.mp3',
-    'ogg': '.ogg', 'm4a': '.m4a',
+    'ogg': '.ogg', 'm4a': '.m4a', 'webm': '.webm',
 }
 
 
