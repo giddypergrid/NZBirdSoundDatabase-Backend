@@ -46,6 +46,10 @@ services:
     environment:
       # Inside the compose network, Postgres is reachable at hostname `db`.
       DB_HOST: db
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-1}
+      GUNICORN_THREADS: ${GUNICORN_THREADS:-4}
+      GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-90}
+      MIN_FREE_MEMORY_BYTES: ${MIN_FREE_MEMORY_BYTES:-524288000}
       # Point Bird_Sound.key_files at the bind-mount locations (they would
       # otherwise default to /MaterialsPrep etc. which don't exist here).
       MATERIALS_PREP_DIR: /seed
