@@ -37,4 +37,4 @@ sentence-transformers
 
 # ── Tabular classifier (BirdClassify) ────────────────────────
 typing_extensions
-autogluon.tabular[lightgbm]==1.5.0
+autogluon.tabular[lightgbm,xgboost]==1.5.0
