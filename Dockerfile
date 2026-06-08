@@ -26,8 +26,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /build
 COPY requirements.txt .
-RUN pip install --prefix=/install torch --index-url https://download.pytorch.org/whl/cpu \
-    && pip install --prefix=/install -r requirements.txt
+RUN pip install torch --index-url https://download.pytorch.org/whl/cpu \
+    && pip install -r requirements.txt
 
 
 # ── Stage 2: runtime ─────────────────────────────────────────
@@ -50,7 +50,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN useradd --create-home --uid 1000 app
 
 # Copy installed Python packages from builder.
-COPY --from=builder /install /usr/local
+COPY --from=builder /usr/local /usr/local
 
 WORKDIR /app
 COPY --chown=app:app . /app
