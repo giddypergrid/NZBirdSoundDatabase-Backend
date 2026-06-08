@@ -15,6 +15,7 @@ import struct
 import pickle
 import logging
 import tempfile
+from threading import Lock
 from pathlib import Path
 
 import numpy as np
@@ -28,13 +29,16 @@ EMBEDDING_DIM = 1024
 
 # ── Singleton holder ──────────────────────────────────────
 _classifier_instance = None
+_classifier_lock = Lock()
 
 
 def get_classifier():
     """Return the singleton BirdClassifier (lazy-loaded on first call)."""
     global _classifier_instance
     if _classifier_instance is None:
-        _classifier_instance = BirdClassifier()
+        with _classifier_lock:
+            if _classifier_instance is None:
+                _classifier_instance = BirdClassifier()
     return _classifier_instance
 
 
@@ -130,6 +134,7 @@ class BirdClassifier:
             sys.stderr = old_err
 
         self.extractor = EmbeddingExtractor(self.analyzer)
+        self._predict_lock = Lock()
 
         logger.info(
             "Bird classifier loaded: %d classes, model=%s",
@@ -145,11 +150,11 @@ class BirdClassifier:
             tmp.write(audio_bytes)
             tmp_path = tmp.name
         try:
-            embedding = self.extractor.extract_from_file(tmp_path, self.analyzer)
-            scaled = self.scaler.transform(embedding.reshape(1, -1))
-            df = pd.DataFrame(scaled, columns=[f"f{i}" for i in range(EMBEDDING_DIM)])
-
-            proba = self.predictor.predict_proba(df).values[0]
+            with self._predict_lock:
+                embedding = self.extractor.extract_from_file(tmp_path, self.analyzer)
+                scaled = self.scaler.transform(embedding.reshape(1, -1))
+                df = pd.DataFrame(scaled, columns=[f"f{i}" for i in range(EMBEDDING_DIM)])
+                proba = self.predictor.predict_proba(df).values[0]
             top_idx = np.argsort(proba)[::-1][:5]
 
             return {
