@@ -252,6 +252,13 @@ if DEBUG:
 else:
     CORS_ALLOW_ALL_ORIGINS = False
     CORS_ALLOWED_ORIGINS = env_list('CORS_ALLOWED_ORIGINS', default=[])
+    # Allow local dev frontends on any port (no local backend anymore, so
+    # `npm start` on the laptop must reach the prod API). Matched in addition
+    # to CORS_ALLOWED_ORIGINS.
+    CORS_ALLOWED_ORIGIN_REGEXES = [
+        r"^http://localhost:\d+$",
+        r"^http://127\.0\.0\.1:\d+$",
+    ]
 
 # ── Security headers ──────────────────────────────────────────────
 # Prod only. Assumes TLS-terminating proxy sets X-Forwarded-Proto.
