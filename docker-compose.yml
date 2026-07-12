@@ -62,8 +62,7 @@ services:
         condition: service_healthy
     expose:
       - "8000"
-    ports:
-      - "8000:8000"
+    networks: [default, web]
     volumes:
       # Dev overlay: host source mounted onto the container so that
       #   - `makemigrations` / `shell` write back to the host filesystem
@@ -103,3 +102,8 @@ services:
 volumes:
   pg_data:
   alloy-data:
+
+networks:
+  default: {}
+  web:
+    external: true

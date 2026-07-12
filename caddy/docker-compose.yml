@@ -1,0 +1,19 @@
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]        # only container binding host ports
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data               # keeps HTTPS certs across restarts
+      - caddy_config:/config
+    networks: [web]
+
+networks:
+  web:
+    external: true
+
+volumes:
+  caddy_data:
+  caddy_config:

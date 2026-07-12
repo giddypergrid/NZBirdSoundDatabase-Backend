@@ -26,13 +26,6 @@ for i in range(60):
 print('[entrypoint] DB never came up'); sys.exit(1)
 "
 
-echo "[entrypoint] Generating any missing migrations from models.py..."
-# No-op when models.py matches the committed migrations.
-# When a dev edits models.py, this generates the new migration file
-# inside the bind-mounted /app, so it lands on the host filesystem
-# ready to be committed to git.
-python manage.py makemigrations --noinput
-
 echo "[entrypoint] Applying migrations..."
 python manage.py migrate --noinput
 
