@@ -103,3 +103,5 @@ Per request:
 
 Django 5.2 · PostgreSQL 16 · BirdNET · AutoGluon · SentenceTransformers  
 Gunicorn · Caddy · Docker · Prometheus + Grafana · Sentry
+
+Caddy runs at the host level as a shared reverse proxy across services — it's not part of this repo's compose stack.
