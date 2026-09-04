@@ -1,20 +1,41 @@
-# NZBirdSoundDatabase — Backend API
+# NZ Bird Sound Database, backend API
 
-Django REST API behind [nzbirddatabase.com](https://nzbirddatabase.com).  
-You upload a bird call, it tells you what bird it is. You type a description, it finds the closest match. That's the product.
+**Live at [nzbirddatabase.com](https://nzbirddatabase.com)** · API at `api.nzbirddatabase.com`
+
+Django REST API behind the site. You upload a bird call, it tells you what bird it is. You type a
+description, it finds the closest match. That's the product.
+
+| Repository | What it holds |
+|---|---|
+| [NZBirdSoundDatabase-AWS](https://github.com/giddypergrid/NZBirdSoundDatabase-AWS) | The deployed version: ECS Fargate, load shedding, 33 live tests. **Read that one for the production story.** |
+| [NZBirdSoundDatabase-Prep](https://github.com/giddypergrid/NZBirdSoundDatabase-Prep) | Data preparation and model training |
+| [NZBirdSoundDatabase-Frontend](https://github.com/giddypergrid/NZBirdSoundDatabase-Frontend) | The React client |
+| this one | The application itself |
+
+### Where to look
+
+| File | Why |
+|---|---|
+| [`Bird_Sound/classifier.py`](Bird_Sound/classifier.py) | The audio pipeline. Singleton, loaded once, holds both models. |
+| [`Bird_Sound/semantic_search.py`](Bird_Sound/semantic_search.py) | Description embeddings and the cosine ranking |
+| [`Bird_Sound/views.py`](Bird_Sound/views.py) | Every endpoint, including the path-traversal guard on file serving |
+| [`Bird_Sound/key_files.py`](Bird_Sound/key_files.py) | Every artifact path in one place |
+
+---
+
 
 ---
 
 ## What this API does
 
-**Reference data** — birds, audio recordings, images. Standard REST reads.
+**Reference data.** Birds, audio recordings, images. Standard REST reads.
 
-**File serving** — audio clips and bird photos, served safely with path traversal protection.
+**File serving.** Audio clips and bird photos, served safely with path traversal protection.
 
-**Audio classification** — POST raw audio, get back an eBird species code and confidence score.  
+**Audio classification.** POST raw audio, get back an eBird species code and confidence score.  
 Under the hood: BirdNET extracts a 1024-dimension audio fingerprint, AutoGluon classifies it.
 
-**Semantic search** — GET a text query like *"loud screech at dawn"*, get back ranked bird matches.  
+**Semantic search.** GET a text query like *"loud screech at dawn"*, get back ranked bird matches.  
 Under the hood: SentenceTransformers turn the query and all bird descriptions into vectors, then cosine similarity finds the closest ones.
 
 ---
@@ -95,7 +116,7 @@ Per request:
 ## Data
 
 > Assets (audio, images, embeddings) are not in this repo.  
-> Upload them when ready — the seed script picks them up automatically on next container start.
+> Upload them when ready. The seed script picks them up automatically on next container start.
 
 ---
 
@@ -104,4 +125,4 @@ Per request:
 Django 5.2 · PostgreSQL 16 · BirdNET · AutoGluon · SentenceTransformers  
 Gunicorn · Caddy · Docker · Prometheus + Grafana · Sentry
 
-Caddy runs at the host level as a shared reverse proxy across services — it's not part of this repo's compose stack.
+Caddy runs at the host level as a shared reverse proxy across services, so it is not part of this repo's compose stack.
