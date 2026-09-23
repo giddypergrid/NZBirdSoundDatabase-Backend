@@ -286,6 +286,10 @@ MAX_CLASSIFY_AUDIO_BYTES    = int(env("MAX_CLASSIFY_AUDIO_BYTES",    default=str
 # psutil.virtual_memory().available drops below this.
 MIN_FREE_MEMORY_BYTES = int(env("MIN_FREE_MEMORY_BYTES", default=str(1 * 1024 * 1024 * 1024)))
 
+# Load the classifier + search models at worker start (~2.4 GB) so the first user doesn't wait
+# ~20 s. Off by default for local dev; docker-compose turns it on.
+PRELOAD_ML_MODELS = env_bool("PRELOAD_ML_MODELS", default=False)
+
 # ── Django REST Framework ────────────────────────────────────────────
 # Scoped throttles: set throttle_scope='classify'/'search' on hot views.
 # Throttles use the default cache (LocMem). Swap to Redis in prod.
