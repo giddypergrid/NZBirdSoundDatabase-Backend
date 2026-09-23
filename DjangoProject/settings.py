@@ -286,6 +286,10 @@ MAX_CLASSIFY_AUDIO_BYTES    = int(env("MAX_CLASSIFY_AUDIO_BYTES",    default=str
 # psutil.virtual_memory().available drops below this.
 MIN_FREE_MEMORY_BYTES = int(env("MIN_FREE_MEMORY_BYTES", default=str(1 * 1024 * 1024 * 1024)))
 
+# Load the classifier + search models at worker start (~2.4 GB) so the first user doesn't wait
+# ~20 s. Off by default for local dev; docker-compose turns it on.
+PRELOAD_ML_MODELS = env_bool("PRELOAD_ML_MODELS", default=False)
+
 # ── Django REST Framework ────────────────────────────────────────────
 # Scoped throttles: set throttle_scope='classify'/'search' on hot views.
 # Throttles use the default cache (LocMem). Swap to Redis in prod.
@@ -296,11 +300,17 @@ REST_FRAMEWORK = {
         'rest_framework.throttling.ScopedRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
-        'anon': env('THROTTLE_ANON', default='120/min'),
+        # Real visitors paging sound lists peaked at 118/min (Sep 2026), so 120 was too tight.
+        'anon': env('THROTTLE_ANON', default='300/min'),
         'classify': env('THROTTLE_CLASSIFY', default='5/min'),
         'search': env('THROTTLE_SEARCH', default='30/min'),
+        # Images/audio: the bird grid loads one image per bird (~140), past the anon limit.
+        'media': env('THROTTLE_MEDIA', default='600/min'),
     },
 }
+
+# Browser cache lifetime for bird images/audio; the files only change on a re-seed.
+MEDIA_CACHE_SECONDS = int(env("MEDIA_CACHE_SECONDS", default=str(60 * 60 * 24)))
 
 # DRF Spectacular Configuration
 SPECTACULAR_SETTINGS = {

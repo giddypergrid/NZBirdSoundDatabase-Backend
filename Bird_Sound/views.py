@@ -12,6 +12,7 @@ from rest_framework import generics
 from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from .models import Bird, BirdSound
@@ -103,16 +104,24 @@ def _serve_static_file(root: Path, relative: Path) -> FileResponse:
     if not target.exists():
         raise NotFound("File not found")
     ctype, _ = guess_type(str(target))
-    return FileResponse(open(target, 'rb'), content_type=ctype or 'application/octet-stream')
+    response = FileResponse(open(target, 'rb'), content_type=ctype or 'application/octet-stream')
+    response['Cache-Control'] = f"public, max-age={settings.MEDIA_CACHE_SECONDS}"
+    return response
 
 
-class AudioFileView(APIView):
+class MediaFileView(APIView):
+    """Own rate scope instead of 'anon', so browsing the grid doesn't lock a visitor out."""
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'media'
+
+
+class AudioFileView(MediaFileView):
     """GET /birds/api/audio/{eBird}/{filename}/"""
     def get(self, request, eBird, filename):
         return _serve_static_file(Path(settings.AUDIO_FILES_ROOT), Path(eBird) / filename)
 
 
-class ImageFileView(APIView):
+class ImageFileView(MediaFileView):
     """GET /birds/api/image/{eBird}/{index}/ — tries jpeg/jpg/png/webp."""
     def get(self, request, eBird, index):
         root = Path(settings.IMAGE_FILES_ROOT)
