@@ -296,7 +296,8 @@ REST_FRAMEWORK = {
         'rest_framework.throttling.ScopedRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
-        'anon': env('THROTTLE_ANON', default='120/min'),
+        # Real visitors paging sound lists peaked at 118/min (Sep 2026), so 120 was too tight.
+        'anon': env('THROTTLE_ANON', default='300/min'),
         'classify': env('THROTTLE_CLASSIFY', default='5/min'),
         'search': env('THROTTLE_SEARCH', default='30/min'),
         # Images/audio: the bird grid loads one image per bird (~140), past the anon limit.
