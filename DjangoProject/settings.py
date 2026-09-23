@@ -299,8 +299,13 @@ REST_FRAMEWORK = {
         'anon': env('THROTTLE_ANON', default='120/min'),
         'classify': env('THROTTLE_CLASSIFY', default='5/min'),
         'search': env('THROTTLE_SEARCH', default='30/min'),
+        # Images/audio: the bird grid loads one image per bird (~140), past the anon limit.
+        'media': env('THROTTLE_MEDIA', default='600/min'),
     },
 }
+
+# Browser cache lifetime for bird images/audio; the files only change on a re-seed.
+MEDIA_CACHE_SECONDS = int(env("MEDIA_CACHE_SECONDS", default=str(60 * 60 * 24)))
 
 # DRF Spectacular Configuration
 SPECTACULAR_SETTINGS = {
