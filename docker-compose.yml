@@ -101,7 +101,7 @@ services:
       GRAFANA_CLOUD_TOKEN: ${GRAFANA_CLOUD_TOKEN}
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    # Debug UI only — loopback, so it isn't reachable from the internet (ufw is off).
+    # Debug UI only — loopback, because Docker-published ports bypass ufw.
     ports:
       - "127.0.0.1:12345:12345"
 
