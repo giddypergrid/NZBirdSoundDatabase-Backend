@@ -43,8 +43,8 @@ services:
     build: .
     container_name: birds-web
     restart: unless-stopped
-    # Warm ML models hold ~2.4 GB; the cap stops them starving the other stacks on a shared host.
-    mem_limit: ${WEB_MEM_LIMIT:-3g}
+    # Warm models ~1 GB, and a classify pushes it to ~2.8 GB (measured Sep 2026), so 3g was too tight.
+    mem_limit: ${WEB_MEM_LIMIT:-4g}
     env_file: .env
     environment:
       # Inside the compose network, Postgres is reachable at hostname `db`.
@@ -101,7 +101,7 @@ services:
       GRAFANA_CLOUD_TOKEN: ${GRAFANA_CLOUD_TOKEN}
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    # Debug UI only — loopback, so it isn't reachable from the internet (ufw is off).
+    # Debug UI only — loopback, because Docker-published ports bypass ufw.
     ports:
       - "127.0.0.1:12345:12345"
 
